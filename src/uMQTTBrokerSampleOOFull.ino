@@ -8,13 +8,29 @@
 
 #include <ESP8266WiFi.h>
 #include "uMQTTBroker.h"
+#include "Servo.h"
+#include <ArduinoJson.h>
 
 /*
  * Your WiFi config here
  */
-char ssid[] = "Livebox-19E2";         // your network SSID (name)
-char pass[] = "hcTzdCTZAqgVLxmKbM";   // your network password
-bool WiFiAP = false;                  // Do yo want the ESP as AP?
+char ssid[] = "Livebox-19E2";       // your network SSID (name)
+char pass[] = "hcTzdCTZAqgVLxmKbM"; // your network password
+bool WiFiAP = false;                // Do yo want the ESP as AP?
+
+String mainTopic = "proto1";
+
+
+/*
+ * Servo conf
+ */
+int servoPin = D7;
+Servo Servo1;
+int servoVal1;
+
+StaticJsonDocument<200> jsonDoc;
+
+void manageMove(int value);
 
 /*
  * Custom broker class with overwritten callback functions
@@ -40,11 +56,30 @@ public:
     os_memcpy(data_str, data, length);
     data_str[length] = '\0';
 
-    Serial.println("received topic '" + topic + "' with data '" + (String)data_str + "'");
+//    Serial.println("received topic '" + topic + "' with data '" + (String)data_str + "'");
+    deserializeJson(jsonDoc, (String)data_str);
+
+      int x1 = jsonDoc["x1"];
+      manageMove(x1);
+
   }
 };
 
 myMQTTBroker myBroker;
+
+/*
+ * Manage movement of servos
+ */
+void manageMove(int value){
+  digitalWrite(LED_BUILTIN, HIGH);
+  servoVal1 = (long)value; //map(value, 0 , 1023, 0, 180);
+  //Serial.println("value : " + (String)servoVal1);
+  Servo1.write(servoVal1);
+  //myBroker.publish("stat/" + mainTopic + "/move", (String)servoVal1);
+  digitalWrite(LED_BUILTIN, LOW);
+
+}
+
 
 /*
  * WiFi init stuff
@@ -74,8 +109,19 @@ void startWiFiAP()
   Serial.println("IP address: " + WiFi.softAPIP().toString());
 }
 
+void initServo()
+{
+  Servo1.attach(servoPin);
+  Servo1.write(0);
+  delay(500);
+  Servo1.write(180);
+  delay(500);
+  Servo1.write(90);
+}
+
 void setup()
 {
+  pinMode(LED_BUILTIN, OUTPUT); // Initialize the BUILTIN_LED pin as an output
   Serial.begin(115200);
   Serial.println();
   Serial.println();
@@ -89,22 +135,23 @@ void setup()
   // Start the broker
   Serial.println("Starting MQTT broker");
   myBroker.init();
+  
+  delay(2000);
+  
+  myBroker.publish("debug/txt", "Démarrage du serveur");
 
-  /*
+  initServo();
+
+/*
  * Subscribe to anything
  */
-  myBroker.subscribe("#");
+  myBroker.subscribe("cmnd/" + mainTopic + "/move");
 }
-
-int counter = 0;
 
 void loop()
 {
   /*
  * Publish the counter value as String
  */
-  myBroker.publish("broker/counter", (String)counter++);
 
-  // wait a second
-  delay(1000);
 }
